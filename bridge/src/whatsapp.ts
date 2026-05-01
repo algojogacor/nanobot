@@ -110,6 +110,11 @@ export class WhatsAppClient {
         // Display QR code in terminal
         console.log('\n📱 Scan this QR code with WhatsApp (Linked Devices):\n');
         qrcode.generate(qr, { small: true });
+        
+        // Provide an external link in case terminal QR is garbled (common in Koyeb logs)
+        const qrLink = `https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encodeURIComponent(qr)}`;
+        console.log(`\n🔗 Jika QR code di atas rusak/tidak bisa discan, klik link ini untuk melihat QR:\n${qrLink}\n`);
+        
         this.options.onQR(qr);
       }
 
