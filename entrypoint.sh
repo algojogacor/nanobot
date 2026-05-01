@@ -23,9 +23,33 @@ mkdir -p /app/data
 if [ ! -f "$CONFIG_FILE" ]; then
     echo "Generating config.json from environment variables..."
 
-    # Build providers section dynamically
     PROVIDERS_JSON=""
 
+    # --- DeepSeek: rotate across KEY_1..KEY_5 by minute ---
+    DEEPSEEK_KEY=""
+    _slot=$(( $(date +%M) % 5 + 1 ))
+    eval "DEEPSEEK_KEY=\${DEEPSEEK_API_KEY_${_slot}:-}"
+    for _k in 1 2 3 4 5; do
+        if [ -z "$DEEPSEEK_KEY" ]; then
+            eval "DEEPSEEK_KEY=\${DEEPSEEK_API_KEY_${_k}:-}"
+        fi
+    done
+    DEEPSEEK_KEY="${DEEPSEEK_KEY:-${DEEPSEEK_API_KEY:-}}"
+    if [ -n "$DEEPSEEK_KEY" ]; then
+        PROVIDERS_JSON="${PROVIDERS_JSON},\"deepseek\":{\"apiKey\":\"${DEEPSEEK_KEY}\"}"
+    fi
+
+    # --- Groq ---
+    if [ -n "${GROQ_API_KEY:-}" ]; then
+        PROVIDERS_JSON="${PROVIDERS_JSON},\"groq\":{\"apiKey\":\"${GROQ_API_KEY}\"}"
+    fi
+
+    # --- Qwen / DashScope — Aliyun China endpoint ---
+    if [ -n "${QWEN_API_KEY:-}" ]; then
+        PROVIDERS_JSON="${PROVIDERS_JSON},\"dashscope\":{\"apiKey\":\"${QWEN_API_KEY}\",\"apiBase\":\"https://dashscope.aliyuncs.com/compatible-mode/v1\"}"
+    fi
+
+    # --- Optional extras ---
     if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
         PROVIDERS_JSON="${PROVIDERS_JSON},\"anthropic\":{\"apiKey\":\"${ANTHROPIC_API_KEY}\"}"
     fi
@@ -38,20 +62,30 @@ if [ ! -f "$CONFIG_FILE" ]; then
     if [ -n "${GEMINI_API_KEY:-}" ]; then
         PROVIDERS_JSON="${PROVIDERS_JSON},\"gemini\":{\"apiKey\":\"${GEMINI_API_KEY}\"}"
     fi
-    if [ -n "${GROQ_API_KEY:-}" ]; then
-        PROVIDERS_JSON="${PROVIDERS_JSON},\"groq\":{\"apiKey\":\"${GROQ_API_KEY}\"}"
-    fi
-    if [ -n "${DEEPSEEK_API_KEY:-}" ]; then
-        PROVIDERS_JSON="${PROVIDERS_JSON},\"deepseek\":{\"apiKey\":\"${DEEPSEEK_API_KEY}\"}"
-    fi
 
     # Strip leading comma
     PROVIDERS_JSON=$(echo "$PROVIDERS_JSON" | sed 's/^,//')
 
-    # Default model (can be overridden via NANOBOT_MODEL env var)
-    DEFAULT_MODEL="${NANOBOT_MODEL:-anthropic/claude-opus-4-5}"
+    # --- Default model priority: DeepSeek > Groq > Qwen ---
+    if [ -n "$DEEPSEEK_KEY" ]; then
+        DEFAULT_MODEL="${NANOBOT_MODEL:-deepseek/deepseek-chat}"
+    elif [ -n "${GROQ_API_KEY:-}" ]; then
+        DEFAULT_MODEL="${NANOBOT_MODEL:-groq/llama-3.3-70b-versatile}"
+    elif [ -n "${QWEN_API_KEY:-}" ]; then
+        DEFAULT_MODEL="${NANOBOT_MODEL:-dashscope/qwen-plus}"
+    else
+        DEFAULT_MODEL="${NANOBOT_MODEL:-deepseek/deepseek-chat}"
+    fi
+
     WORKSPACE="${NANOBOT_WORKSPACE:-/app/data}"
     TIMEZONE="${NANOBOT_TIMEZONE:-Asia/Jakarta}"
+
+    # --- Telegram channel ---
+    if [ -n "${TELEGRAM_BOT_TOKEN:-}" ]; then
+        CHANNELS_JSON="\"sendProgress\":true,\"telegram\":{\"enabled\":true,\"token\":\"${TELEGRAM_BOT_TOKEN}\",\"allowFrom\":[\"*\"],\"streaming\":true}"
+    else
+        CHANNELS_JSON="\"sendProgress\":true"
+    fi
 
     cat > "$CONFIG_FILE" <<EOCFG
 {
@@ -65,13 +99,15 @@ if [ ! -f "$CONFIG_FILE" ]; then
     }
   },
   "providers": {${PROVIDERS_JSON}},
+  "channels": {${CHANNELS_JSON}},
   "gateway": {
     "host": "0.0.0.0",
     "port": 18790
   }
 }
 EOCFG
-    echo "Config generated at $CONFIG_FILE"
+    echo "Config generated: model=${DEFAULT_MODEL}"
+    echo "Providers active: $(echo "$PROVIDERS_JSON" | grep -oE '"[a-z]+":\{' | tr -d '":{' | tr '\n' ' ')"
 fi
 
 run_supabase_sync() {
