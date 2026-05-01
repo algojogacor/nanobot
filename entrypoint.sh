@@ -34,6 +34,13 @@ if [ "$should_manage_backups" -eq 1 ]; then
     run_supabase_sync restore
 fi
 
+# Copy skills from repository to workspace
+if [ -d "/app/skills" ]; then
+    echo "Copying repository skills to workspace..."
+    mkdir -p /app/data/skills
+    cp -r /app/skills/* /app/data/skills/ 2>/dev/null || true
+fi
+
 echo "Generating config.json via Python..."
 
 # Keys are read from env vars — never hardcoded in source
@@ -121,6 +128,25 @@ channels = {
     }
 }
 
+# ── Build MCP Servers block ──────────────────────────────────────────────────
+mcp_servers = {
+    # 1. Google Drive / Docs (membutuhkan GOOGLE_APPLICATION_CREDENTIALS)
+    "google-drive": {
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-googledrive"]
+    },
+    # 2. Puppeteer (Web Scraper / Headless Browser)
+    "puppeteer": {
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-puppeteer"]
+    },
+    # 3. Fetch (Simple Web Fetcher)
+    "fetch": {
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-fetch"]
+    }
+}
+
 # ── Full config ───────────────────────────────────────────────────────────────
 config = {
     "agents": {
@@ -135,6 +161,7 @@ config = {
     },
     "providers": providers,
     "channels":  channels,
+    "mcpServers": mcp_servers,
     "gateway": {
         "host": "0.0.0.0",
         "port": 18790,
