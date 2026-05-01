@@ -213,6 +213,16 @@ for name, cfg in providers.items():
 print(f"   pools    : deepseek={len(deepseek_pool)} qwen={len(qwen_pool)} groq={len(groq_pool)} mistral={len(mistral_pool)}")
 PYEOF
 
+# ── Reset WhatsApp Session (if requested) ──────────────────────────────────────
+if [ "${RESET_WA_SESSION:-0}" = "1" ]; then
+    echo "⚠️  RESET_WA_SESSION=1 detected — clearing WhatsApp auth files..."
+    rm -rf "$HOME/.nanobot/whatsapp-auth/baileys_store.json"
+    rm -rf "$HOME/.nanobot/whatsapp-auth/creds.json"
+    rm -rf "$HOME/.nanobot/whatsapp-auth/session-"*
+    echo "✅ WhatsApp session cleared. Bot will show new QR code."
+    echo "   (Hapus env var RESET_WA_SESSION setelah scan QR agar tidak reset lagi)"
+fi
+
 # ── Start WhatsApp Bridge (Background) ─────────────────────────────────────────
 if [ -d "/app/bridge" ]; then
     export BRIDGE_TOKEN=$(cat ~/.nanobot/whatsapp-auth/bridge-token)
