@@ -93,6 +93,10 @@ export class WhatsAppClient {
       browser: ['nanobot', 'cli', VERSION],
       syncFullHistory: false,
       markOnlineOnConnect: false,
+      keepAliveIntervalMs: 30000,
+      connectTimeoutMs: 60000,
+      defaultQueryTimeoutMs: 60000,
+      generateHighQualityLinkPreview: false,
     });
 
     // Handle WebSocket errors

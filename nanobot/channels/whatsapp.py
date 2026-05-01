@@ -129,7 +129,12 @@ class WhatsAppChannel(BaseChannel):
 
         while self._running:
             try:
-                async with websockets.connect(bridge_url) as ws:
+                async with websockets.connect(
+                    bridge_url, 
+                    ping_interval=None,
+                    ping_timeout=None,
+                    open_timeout=30
+                ) as ws:
                     self._ws = ws
                     await ws.send(
                         json.dumps({"type": "auth", "token": self._effective_bridge_token()})
