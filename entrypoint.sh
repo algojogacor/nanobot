@@ -143,7 +143,10 @@ mcp_servers = {
         "command": "npx",
         "args": ["-y", "mcp-google-drive"],
         "env": {
-            "GOOGLE_APPLICATION_CREDENTIALS": os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", ""),
+            "GOOGLE_SERVICE_ACCOUNT_KEY": os.environ.get("GOOGLE_CREDENTIALS_JSON", ""),
+            "MCP_MODE": "stdio",
+            "LOG_LEVEL": "error",
+            "DISABLE_CONSOLE_OUTPUT": "true",
         }
     },
     # 2. Puppeteer (Web Scraper / Headless Browser)
