@@ -41,6 +41,13 @@ if [ -d "/app/skills" ]; then
     cp -r /app/skills/* /app/data/skills/ 2>/dev/null || true
 fi
 
+# Handle Google Credentials from env var
+if [ -n "${GOOGLE_CREDENTIALS_JSON:-}" ]; then
+    printf "%s\n" "$GOOGLE_CREDENTIALS_JSON" > "$HOME/.nanobot/google-credentials.json"
+    export GOOGLE_APPLICATION_CREDENTIALS="$HOME/.nanobot/google-credentials.json"
+    echo "Google Service Account credentials loaded."
+fi
+
 echo "Generating config.json via Python..."
 
 # Keys are read from env vars — never hardcoded in source
@@ -51,6 +58,7 @@ echo "Generating config.json via Python..."
 #   ZHIPU_API_KEY_1    .. ZHIPU_API_KEY_2
 #   MISTRAL_API_KEY_1  .. MISTRAL_API_KEY_4
 #   TELEGRAM_BOT_TOKEN
+#   GOOGLE_CREDENTIALS_JSON (untuk MCP Google Docs/Drive)
 #   NANOBOT_MODEL      (optional override, default: deepseek-v4-pro)
 
 python3 - <<'PYEOF'
