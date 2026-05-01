@@ -27,7 +27,7 @@ class WhatsAppConfig(Base):
     bridge_url: str = "ws://localhost:3001"
     bridge_token: str = ""
     allow_from: list[str] = Field(default_factory=list)
-    group_policy: Literal["open", "mention"] = "open"  # "open" responds to all, "mention" only when @mentioned
+    group_policy: Literal["open", "mention", "ignore"] = "open"  # "open" responds to all, "mention" only when @mentioned, "ignore" skips groups
 
 
 def _bridge_token_path() -> Path:
@@ -224,10 +224,15 @@ class WhatsAppChannel(BaseChannel):
             # Extract just the phone number or lid as chat_id
             is_group = data.get("isGroup", False)
             was_mentioned = data.get("wasMentioned", False)
+            policy = getattr(self.config, "group_policy", "open")
 
-            if is_group and getattr(self.config, "group_policy", "open") == "mention":
-                if not was_mentioned:
+            if is_group:
+                if policy == "ignore":
+                    logger.debug(f"Ignoring group message from {sender} due to group_policy='ignore'")
                     return
+                elif policy == "mention":
+                    if not was_mentioned:
+                        return
 
             # Classify by JID suffix: @s.whatsapp.net = phone, @lid.whatsapp.net = LID
             # The bridge's pn/sender fields don't consistently map to phone/LID across versions.
