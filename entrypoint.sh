@@ -13,6 +13,67 @@ EOF
     exit 1
 fi
 
+# --- Auto-generate config.json from environment variables ---
+CONFIG_FILE="$HOME/.nanobot/config.json"
+mkdir -p "$HOME/.nanobot"
+
+# Create workspace directory
+mkdir -p /app/data
+
+if [ ! -f "$CONFIG_FILE" ]; then
+    echo "Generating config.json from environment variables..."
+
+    # Build providers section dynamically
+    PROVIDERS_JSON=""
+
+    if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
+        PROVIDERS_JSON="${PROVIDERS_JSON},\"anthropic\":{\"apiKey\":\"${ANTHROPIC_API_KEY}\"}"
+    fi
+    if [ -n "${OPENAI_API_KEY:-}" ]; then
+        PROVIDERS_JSON="${PROVIDERS_JSON},\"openai\":{\"apiKey\":\"${OPENAI_API_KEY}\"}"
+    fi
+    if [ -n "${OPENROUTER_API_KEY:-}" ]; then
+        PROVIDERS_JSON="${PROVIDERS_JSON},\"openrouter\":{\"apiKey\":\"${OPENROUTER_API_KEY}\"}"
+    fi
+    if [ -n "${GEMINI_API_KEY:-}" ]; then
+        PROVIDERS_JSON="${PROVIDERS_JSON},\"gemini\":{\"apiKey\":\"${GEMINI_API_KEY}\"}"
+    fi
+    if [ -n "${GROQ_API_KEY:-}" ]; then
+        PROVIDERS_JSON="${PROVIDERS_JSON},\"groq\":{\"apiKey\":\"${GROQ_API_KEY}\"}"
+    fi
+    if [ -n "${DEEPSEEK_API_KEY:-}" ]; then
+        PROVIDERS_JSON="${PROVIDERS_JSON},\"deepseek\":{\"apiKey\":\"${DEEPSEEK_API_KEY}\"}"
+    fi
+
+    # Strip leading comma
+    PROVIDERS_JSON=$(echo "$PROVIDERS_JSON" | sed 's/^,//')
+
+    # Default model (can be overridden via NANOBOT_MODEL env var)
+    DEFAULT_MODEL="${NANOBOT_MODEL:-anthropic/claude-opus-4-5}"
+    WORKSPACE="${NANOBOT_WORKSPACE:-/app/data}"
+    TIMEZONE="${NANOBOT_TIMEZONE:-Asia/Jakarta}"
+
+    cat > "$CONFIG_FILE" <<EOCFG
+{
+  "agents": {
+    "defaults": {
+      "model": "${DEFAULT_MODEL}",
+      "workspace": "${WORKSPACE}",
+      "timezone": "${TIMEZONE}",
+      "maxTokens": 8192,
+      "temperature": 0.1
+    }
+  },
+  "providers": {${PROVIDERS_JSON}},
+  "gateway": {
+    "host": "0.0.0.0",
+    "port": 18790
+  }
+}
+EOCFG
+    echo "Config generated at $CONFIG_FILE"
+fi
+
 run_supabase_sync() {
     action="$1"
     if [ -n "${SUPABASE_URL:-}" ] && [ -n "${SUPABASE_SERVICE_ROLE_KEY:-}" ]; then
