@@ -97,7 +97,15 @@ if not providers:
     raise SystemExit("❌ No API keys found! Set at least DEEPSEEK_API_KEY_1 in Koyeb env vars.")
 
 # ── Build channels block ─────────────────────────────────────────────────────
-channels = {"sendProgress": True}
+channels = {
+    "sendProgress": True,
+    "whatsapp": {
+        "enabled": True,
+        "bridgeUrl": "ws://localhost:3001",
+        "allowFrom": ["*"],
+        "groupPolicy": "open"
+    }
+}
 if tg_token:
     channels["telegram"] = {
         "enabled":   True,
@@ -130,6 +138,15 @@ config_path = os.path.expanduser("~/.nanobot/config.json")
 with open(config_path, "w") as f:
     json.dump(config, f, indent=2)
 
+# ── WhatsApp Token ────────────────────────────────────────────────────────────
+import secrets
+wa_auth_dir = os.path.expanduser("~/.nanobot/whatsapp-auth")
+os.makedirs(wa_auth_dir, exist_ok=True)
+token_path = os.path.join(wa_auth_dir, "bridge-token")
+if not os.path.exists(token_path):
+    with open(token_path, "w") as f:
+        f.write(secrets.token_urlsafe(32))
+
 # ── Summary ───────────────────────────────────────────────────────────────────
 print(f"✅ Config generated")
 print(f"   model    : {default_model}")
@@ -140,6 +157,14 @@ for name, cfg in providers.items():
 print(f"   telegram : {'✓ ' + tg_token[:20] + '...' if tg_token else '✗ not set'}")
 print(f"   pools    : deepseek={len(deepseek_pool)} qwen={len(qwen_pool)} groq={len(groq_pool)} mistral={len(mistral_pool)}")
 PYEOF
+fi
+
+# ── Start WhatsApp Bridge (Background) ─────────────────────────────────────────
+if [ -d "/app/bridge" ]; then
+    export BRIDGE_TOKEN=$(cat ~/.nanobot/whatsapp-auth/bridge-token)
+    export AUTH_DIR="$HOME/.nanobot/whatsapp-auth"
+    echo "Starting WhatsApp bridge in background..."
+    (cd /app/bridge && npm start) &
 fi
 
 run_supabase_sync() {

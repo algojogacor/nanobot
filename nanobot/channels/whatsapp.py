@@ -300,7 +300,19 @@ class WhatsAppChannel(BaseChannel):
 
         elif msg_type == "qr":
             # QR code for authentication
-            logger.info("Scan QR code in the bridge terminal to connect WhatsApp")
+            qr_data = data.get("qr", "")
+            if qr_data:
+                try:
+                    from urllib.parse import quote
+                    encoded = quote(qr_data, safe="")
+                    qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=400x400&data={encoded}"
+                    logger.info("📱 WHATSAPP LOGIN REQUIRED")
+                    logger.info("Scan this QR code with WhatsApp -> Linked Devices:")
+                    logger.info("URL: {}", qr_url)
+                except Exception as e:
+                    logger.warning("Failed to generate QR URL: {}", e)
+            else:
+                logger.info("Scan QR code in the bridge terminal to connect WhatsApp")
 
         elif msg_type == "error":
             logger.error("WhatsApp bridge error: {}", data.get("error"))
