@@ -13,101 +13,133 @@ EOF
     exit 1
 fi
 
-# --- Auto-generate config.json from environment variables ---
-CONFIG_FILE="$HOME/.nanobot/config.json"
 mkdir -p "$HOME/.nanobot"
-
-# Create workspace directory
 mkdir -p /app/data
 
+CONFIG_FILE="$HOME/.nanobot/config.json"
+
 if [ ! -f "$CONFIG_FILE" ]; then
-    echo "Generating config.json from environment variables..."
+    echo "Generating config.json via Python..."
 
-    PROVIDERS_JSON=""
+    # Keys are read from env vars — never hardcoded in source
+    # Set these in Koyeb dashboard:
+    #   DEEPSEEK_API_KEY_1 .. DEEPSEEK_API_KEY_10
+    #   QWEN_API_KEY_1     .. QWEN_API_KEY_10
+    #   GROQ_API_KEY_1     .. GROQ_API_KEY_3
+    #   ZHIPU_API_KEY_1    .. ZHIPU_API_KEY_2
+    #   MISTRAL_API_KEY_1  .. MISTRAL_API_KEY_4
+    #   TELEGRAM_BOT_TOKEN
+    #   NANOBOT_MODEL      (optional override, default: deepseek-v4-pro)
 
-    # --- DeepSeek: rotate across KEY_1..KEY_5 by minute ---
-    DEEPSEEK_KEY=""
-    _slot=$(( $(date +%M) % 5 + 1 ))
-    eval "DEEPSEEK_KEY=\${DEEPSEEK_API_KEY_${_slot}:-}"
-    for _k in 1 2 3 4 5; do
-        if [ -z "$DEEPSEEK_KEY" ]; then
-            eval "DEEPSEEK_KEY=\${DEEPSEEK_API_KEY_${_k}:-}"
-        fi
-    done
-    DEEPSEEK_KEY="${DEEPSEEK_KEY:-${DEEPSEEK_API_KEY:-}}"
-    if [ -n "$DEEPSEEK_KEY" ]; then
-        PROVIDERS_JSON="${PROVIDERS_JSON},\"deepseek\":{\"apiKey\":\"${DEEPSEEK_KEY}\"}"
-    fi
+    python3 - <<'PYEOF'
+import json, os, random
 
-    # --- Groq ---
-    if [ -n "${GROQ_API_KEY:-}" ]; then
-        PROVIDERS_JSON="${PROVIDERS_JSON},\"groq\":{\"apiKey\":\"${GROQ_API_KEY}\"}"
-    fi
+def load_pool(prefix, count):
+    """Collect non-empty env vars: PREFIX_1, PREFIX_2, ..., PREFIX_N"""
+    pool = []
+    for i in range(1, count + 1):
+        v = os.environ.get(f"{prefix}_{i}", "").strip()
+        if v:
+            pool.append(v)
+    # Also accept plain PREFIX (single key fallback)
+    plain = os.environ.get(prefix, "").strip()
+    if plain and plain not in pool:
+        pool.append(plain)
+    return pool
 
-    # --- Qwen / DashScope — Aliyun China endpoint ---
-    if [ -n "${QWEN_API_KEY:-}" ]; then
-        PROVIDERS_JSON="${PROVIDERS_JSON},\"dashscope\":{\"apiKey\":\"${QWEN_API_KEY}\",\"apiBase\":\"https://dashscope.aliyuncs.com/compatible-mode/v1\"}"
-    fi
+def pick(pool):
+    return random.choice(pool) if pool else None
 
-    # --- Optional extras ---
-    if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
-        PROVIDERS_JSON="${PROVIDERS_JSON},\"anthropic\":{\"apiKey\":\"${ANTHROPIC_API_KEY}\"}"
-    fi
-    if [ -n "${OPENAI_API_KEY:-}" ]; then
-        PROVIDERS_JSON="${PROVIDERS_JSON},\"openai\":{\"apiKey\":\"${OPENAI_API_KEY}\"}"
-    fi
-    if [ -n "${OPENROUTER_API_KEY:-}" ]; then
-        PROVIDERS_JSON="${PROVIDERS_JSON},\"openrouter\":{\"apiKey\":\"${OPENROUTER_API_KEY}\"}"
-    fi
-    if [ -n "${GEMINI_API_KEY:-}" ]; then
-        PROVIDERS_JSON="${PROVIDERS_JSON},\"gemini\":{\"apiKey\":\"${GEMINI_API_KEY}\"}"
-    fi
+# ── Load key pools from environment ─────────────────────────────────────────
+deepseek_pool = load_pool("DEEPSEEK_API_KEY", 10)
+qwen_pool     = load_pool("QWEN_API_KEY",     10)
+groq_pool     = load_pool("GROQ_API_KEY",      3)
+zhipu_pool    = load_pool("ZHIPU_API_KEY",     2)
+mistral_pool  = load_pool("MISTRAL_API_KEY",   8)
 
-    # Strip leading comma
-    PROVIDERS_JSON=$(echo "$PROVIDERS_JSON" | sed 's/^,//')
+# ── Pick one randomly from each pool ────────────────────────────────────────
+deepseek_key = pick(deepseek_pool)
+qwen_key     = pick(qwen_pool)
+groq_key     = pick(groq_pool)
+zhipu_key    = pick(zhipu_pool)
+mistral_key  = pick(mistral_pool)
 
-    # --- Default model priority: DeepSeek > Groq > Qwen ---
-    if [ -n "$DEEPSEEK_KEY" ]; then
-        DEFAULT_MODEL="${NANOBOT_MODEL:-deepseek/deepseek-chat}"
-    elif [ -n "${GROQ_API_KEY:-}" ]; then
-        DEFAULT_MODEL="${NANOBOT_MODEL:-groq/llama-3.3-70b-versatile}"
-    elif [ -n "${QWEN_API_KEY:-}" ]; then
-        DEFAULT_MODEL="${NANOBOT_MODEL:-dashscope/qwen-plus}"
-    else
-        DEFAULT_MODEL="${NANOBOT_MODEL:-deepseek/deepseek-chat}"
-    fi
+# ── Settings ─────────────────────────────────────────────────────────────────
+# Model fallback priority: deepseek-v4-pro > deepseek-chat > qwen3.6-plus > qwen-max
+default_model = os.environ.get("NANOBOT_MODEL", "deepseek-v4-pro")
+workspace     = os.environ.get("NANOBOT_WORKSPACE", "/app/data")
+timezone      = os.environ.get("NANOBOT_TIMEZONE", "Asia/Jakarta")
+tg_token      = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 
-    WORKSPACE="${NANOBOT_WORKSPACE:-/app/data}"
-    TIMEZONE="${NANOBOT_TIMEZONE:-Asia/Jakarta}"
+# ── Build providers block ────────────────────────────────────────────────────
+providers = {}
 
-    # --- Telegram channel ---
-    if [ -n "${TELEGRAM_BOT_TOKEN:-}" ]; then
-        CHANNELS_JSON="\"sendProgress\":true,\"telegram\":{\"enabled\":true,\"token\":\"${TELEGRAM_BOT_TOKEN}\",\"allowFrom\":[\"*\"],\"streaming\":true}"
-    else
-        CHANNELS_JSON="\"sendProgress\":true"
-    fi
+if deepseek_key:
+    providers["deepseek"] = {"apiKey": deepseek_key}
 
-    cat > "$CONFIG_FILE" <<EOCFG
-{
-  "agents": {
-    "defaults": {
-      "model": "${DEFAULT_MODEL}",
-      "workspace": "${WORKSPACE}",
-      "timezone": "${TIMEZONE}",
-      "maxTokens": 8192,
-      "temperature": 0.1
+if qwen_key:
+    # China endpoint (user confirmed)
+    providers["dashscope"] = {
+        "apiKey":  qwen_key,
+        "apiBase": "https://dashscope.aliyuncs.com/compatible-mode/v1",
     }
-  },
-  "providers": {${PROVIDERS_JSON}},
-  "channels": {${CHANNELS_JSON}},
-  "gateway": {
-    "host": "0.0.0.0",
-    "port": 18790
-  }
+
+if groq_key:
+    providers["groq"] = {"apiKey": groq_key}
+
+if zhipu_key:
+    providers["zhipu"] = {"apiKey": zhipu_key}
+
+if mistral_key:
+    providers["mistral"] = {"apiKey": mistral_key}
+
+if not providers:
+    raise SystemExit("❌ No API keys found! Set at least DEEPSEEK_API_KEY_1 in Koyeb env vars.")
+
+# ── Build channels block ─────────────────────────────────────────────────────
+channels = {"sendProgress": True}
+if tg_token:
+    channels["telegram"] = {
+        "enabled":   True,
+        "token":     tg_token,
+        "allowFrom": ["*"],
+        "streaming": True,
+    }
+
+# ── Full config ───────────────────────────────────────────────────────────────
+config = {
+    "agents": {
+        "defaults": {
+            "model":            default_model,
+            "workspace":        workspace,
+            "timezone":         timezone,
+            "maxTokens":        8192,
+            "temperature":      0.1,
+            "providerRetryMode": "persistent",
+        }
+    },
+    "providers": providers,
+    "channels":  channels,
+    "gateway": {
+        "host": "0.0.0.0",
+        "port": 18790,
+    },
 }
-EOCFG
-    echo "Config generated: model=${DEFAULT_MODEL}"
-    echo "Providers active: $(echo "$PROVIDERS_JSON" | grep -oE '"[a-z]+":\{' | tr -d '":{' | tr '\n' ' ')"
+
+config_path = os.path.expanduser("~/.nanobot/config.json")
+with open(config_path, "w") as f:
+    json.dump(config, f, indent=2)
+
+# ── Summary ───────────────────────────────────────────────────────────────────
+print(f"✅ Config generated")
+print(f"   model    : {default_model}")
+for name, cfg in providers.items():
+    key_preview = cfg.get("apiKey", "")[:14] + "..."
+    base = f" [{cfg['apiBase']}]" if "apiBase" in cfg else ""
+    print(f"   {name:<10}: {key_preview}{base}")
+print(f"   telegram : {'✓ ' + tg_token[:20] + '...' if tg_token else '✗ not set'}")
+print(f"   pools    : deepseek={len(deepseek_pool)} qwen={len(qwen_pool)} groq={len(groq_pool)} mistral={len(mistral_pool)}")
+PYEOF
 fi
 
 run_supabase_sync() {
