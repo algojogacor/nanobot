@@ -226,6 +226,13 @@ class WhatsAppChannel(BaseChannel):
                 while len(self._processed_message_ids) > 1000:
                     self._processed_message_ids.popitem(last=False)
 
+            # Prevent processing a huge backlog of offline messages which causes OOM / CPU starvation
+            import time
+            timestamp = data.get("timestamp")
+            if timestamp and time.time() - timestamp > 300:
+                logger.info("Ignoring old message {} from {} ({} seconds old)", message_id, sender, int(time.time() - timestamp))
+                return
+
             # Extract just the phone number or lid as chat_id
             is_group = data.get("isGroup", False)
             was_mentioned = data.get("wasMentioned", False)
