@@ -169,7 +169,9 @@ config = {
     },
     "providers": providers,
     "channels":  channels,
-    "mcp_servers": mcp_servers,
+    "tools": {
+        "mcp_servers": mcp_servers
+    },
     "gateway": {
         "host": "0.0.0.0",
         "port": 18790,
