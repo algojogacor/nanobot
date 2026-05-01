@@ -174,6 +174,7 @@ config = {
             "workspace":        workspace,
             "timezone":         timezone,
             "maxTokens":        8192,
+            "contextWindowTokens": 1048576,
             "temperature":      0.1,
             "providerRetryMode": "persistent",
         }
