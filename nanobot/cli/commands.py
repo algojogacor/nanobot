@@ -840,7 +840,7 @@ def gateway(
             if len(parts) >= 2:
                 method, path = parts[0], parts[1]
 
-            if method == "GET" and path == "/health":
+            if method == "GET" and path in ("/health", "/"):
                 body = _json.dumps({"status": "ok"})
                 resp = (
                     f"HTTP/1.0 200 OK\r\n"
@@ -860,6 +860,10 @@ def gateway(
             writer.write(resp.encode())
             await writer.drain()
             writer.close()
+            try:
+                await writer.wait_closed()
+            except Exception:
+                pass
 
         server = await asyncio.start_server(handle, host, health_port)
         console.print(f"[green]✓[/green] Health endpoint: http://{host}:{health_port}/health")
