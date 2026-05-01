@@ -18,20 +18,35 @@ mkdir -p /app/data
 
 CONFIG_FILE="$HOME/.nanobot/config.json"
 
-if [ ! -f "$CONFIG_FILE" ]; then
-    echo "Generating config.json via Python..."
+run_supabase_sync() {
+    action="$1"
+    if [ -n "${SUPABASE_URL:-}" ] && [ -n "${SUPABASE_SERVICE_ROLE_KEY:-}" ]; then
+        python -m nanobot.supabase_sync "$action" || true
+    fi
+}
 
-    # Keys are read from env vars — never hardcoded in source
-    # Set these in Koyeb dashboard:
-    #   DEEPSEEK_API_KEY_1 .. DEEPSEEK_API_KEY_10
-    #   QWEN_API_KEY_1     .. QWEN_API_KEY_10
-    #   GROQ_API_KEY_1     .. GROQ_API_KEY_3
-    #   ZHIPU_API_KEY_1    .. ZHIPU_API_KEY_2
-    #   MISTRAL_API_KEY_1  .. MISTRAL_API_KEY_4
-    #   TELEGRAM_BOT_TOKEN
-    #   NANOBOT_MODEL      (optional override, default: deepseek-v4-pro)
+should_manage_backups=0
+if [ "${1:-}" = "gateway" ] || [ "${1:-}" = "serve" ]; then
+    should_manage_backups=1
+fi
 
-    python3 - <<'PYEOF'
+if [ "$should_manage_backups" -eq 1 ]; then
+    run_supabase_sync restore
+fi
+
+echo "Generating config.json via Python..."
+
+# Keys are read from env vars — never hardcoded in source
+# Set these in Koyeb dashboard:
+#   DEEPSEEK_API_KEY_1 .. DEEPSEEK_API_KEY_10
+#   QWEN_API_KEY_1     .. QWEN_API_KEY_10
+#   GROQ_API_KEY_1     .. GROQ_API_KEY_3
+#   ZHIPU_API_KEY_1    .. ZHIPU_API_KEY_2
+#   MISTRAL_API_KEY_1  .. MISTRAL_API_KEY_4
+#   TELEGRAM_BOT_TOKEN
+#   NANOBOT_MODEL      (optional override, default: deepseek-v4-pro)
+
+python3 - <<'PYEOF'
 import json, os, random
 
 def load_pool(prefix, count):
@@ -69,7 +84,6 @@ mistral_key  = pick(mistral_pool)
 default_model = os.environ.get("NANOBOT_MODEL", "deepseek-v4-pro")
 workspace     = os.environ.get("NANOBOT_WORKSPACE", "/app/data")
 timezone      = os.environ.get("NANOBOT_TIMEZONE", "Asia/Jakarta")
-tg_token      = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 
 # ── Build providers block ────────────────────────────────────────────────────
 providers = {}
@@ -106,13 +120,6 @@ channels = {
         "groupPolicy": "open"
     }
 }
-if tg_token:
-    channels["telegram"] = {
-        "enabled":   True,
-        "token":     tg_token,
-        "allowFrom": ["*"],
-        "streaming": True,
-    }
 
 # ── Full config ───────────────────────────────────────────────────────────────
 config = {
@@ -154,10 +161,8 @@ for name, cfg in providers.items():
     key_preview = cfg.get("apiKey", "")[:14] + "..."
     base = f" [{cfg['apiBase']}]" if "apiBase" in cfg else ""
     print(f"   {name:<10}: {key_preview}{base}")
-print(f"   telegram : {'✓ ' + tg_token[:20] + '...' if tg_token else '✗ not set'}")
 print(f"   pools    : deepseek={len(deepseek_pool)} qwen={len(qwen_pool)} groq={len(groq_pool)} mistral={len(mistral_pool)}")
 PYEOF
-fi
 
 # ── Start WhatsApp Bridge (Background) ─────────────────────────────────────────
 if [ -d "/app/bridge" ]; then
@@ -165,22 +170,6 @@ if [ -d "/app/bridge" ]; then
     export AUTH_DIR="$HOME/.nanobot/whatsapp-auth"
     echo "Starting WhatsApp bridge in background..."
     (cd /app/bridge && npm start) &
-fi
-
-run_supabase_sync() {
-    action="$1"
-    if [ -n "${SUPABASE_URL:-}" ] && [ -n "${SUPABASE_SERVICE_ROLE_KEY:-}" ]; then
-        python -m nanobot.supabase_sync "$action" || true
-    fi
-}
-
-should_manage_backups=0
-if [ "${1:-}" = "gateway" ] || [ "${1:-}" = "serve" ]; then
-    should_manage_backups=1
-fi
-
-if [ "$should_manage_backups" -eq 1 ]; then
-    run_supabase_sync restore
 fi
 
 sync_pid=""

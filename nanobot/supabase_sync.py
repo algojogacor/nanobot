@@ -24,6 +24,7 @@ from supabase import Client, create_client
 _EXCLUDED_RUNTIME_TOPLEVEL = {
     "bridge",  # rebuilt locally as needed
     "logs",
+    "config.json",
 }
 
 
