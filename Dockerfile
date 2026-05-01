@@ -24,13 +24,14 @@ RUN mkdir -p nanobot bridge && touch nanobot/__init__.py && \
 COPY nanobot/ nanobot/
 COPY bridge/ bridge/
 COPY skills/ /app/skills/
-RUN uv pip install --system --no-cache .
+RUN uv pip install --system --no-cache . mcp-server-fetch
 
 # Build the WhatsApp bridge
 WORKDIR /app/bridge
 RUN git config --global --add url."https://github.com/".insteadOf ssh://git@github.com/ && \
     git config --global --add url."https://github.com/".insteadOf git@github.com: && \
-    npm install && npm run build
+    npm install && npm run build && \
+    npm install -g mcp-google-drive @perplexity-ai/mcp-server
 WORKDIR /app
 
 # Create non-root user and config directory

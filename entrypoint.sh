@@ -86,6 +86,7 @@ qwen_pool     = load_pool("QWEN_API_KEY",     10)
 groq_pool     = load_pool("GROQ_API_KEY",      3)
 zhipu_pool    = load_pool("ZHIPU_API_KEY",     2)
 mistral_pool  = load_pool("MISTRAL_API_KEY",   8)
+perplexity_pool = load_pool("PERPLEXITY_API_KEY", 2)
 
 # ── Pick one randomly from each pool ────────────────────────────────────────
 deepseek_key = pick(deepseek_pool)
@@ -93,6 +94,7 @@ qwen_key     = pick(qwen_pool)
 groq_key     = pick(groq_pool)
 zhipu_key    = pick(zhipu_pool)
 mistral_key  = pick(mistral_pool)
+perplexity_key = pick(perplexity_pool)
 
 # ── Settings ─────────────────────────────────────────────────────────────────
 # Model fallback priority: deepseek-v4-pro > deepseek-chat > qwen3.6-plus > qwen-max
@@ -141,7 +143,7 @@ mcp_servers = {
     # 1. Google Drive / Docs (mcp-google-drive via npm, pakai Service Account)
     "google-drive": {
         "command": "npx",
-        "args": ["-y", "mcp-google-drive"],
+        "args": ["--no-install", "mcp-google-drive"],
         "env": {
             "GOOGLE_SERVICE_ACCOUNT_KEY": os.environ.get("GOOGLE_CREDENTIALS_JSON", ""),
             "MCP_MODE": "stdio",
@@ -149,15 +151,18 @@ mcp_servers = {
             "DISABLE_CONSOLE_OUTPUT": "true",
         }
     },
-    # 2. Puppeteer (Web Scraper / Headless Browser)
-    "puppeteer": {
+    # 2. Perplexity (Web Search & Reasoning)
+    "perplexity": {
         "command": "npx",
-        "args": ["-y", "@modelcontextprotocol/server-puppeteer"]
+        "args": ["--no-install", "@perplexity-ai/mcp-server"],
+        "env": {
+            "PERPLEXITY_API_KEY": perplexity_key or ""
+        }
     },
-    # 3. Fetch (Simple Web Fetcher - Python package, dijalankan via uvx)
+    # 3. Fetch (Simple Web Fetcher - Python package, pre-installed)
     "fetch": {
-        "command": "uvx",
-        "args": ["mcp-server-fetch"]
+        "command": "mcp-server-fetch",
+        "args": []
     }
 }
 
