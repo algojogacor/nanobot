@@ -117,7 +117,7 @@ channels = {
         "enabled": True,
         "bridgeUrl": "ws://localhost:3001",
         "allowFrom": ["*"],
-        "groupPolicy": "ignore"
+        "groupPolicy": "mention"
     }
 }
 
