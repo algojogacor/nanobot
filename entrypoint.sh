@@ -138,20 +138,23 @@ channels = {
 
 # ── Build MCP Servers block ──────────────────────────────────────────────────
 mcp_servers = {
-    # 1. Google Drive / Docs (membutuhkan GOOGLE_APPLICATION_CREDENTIALS)
+    # 1. Google Drive / Docs (mcp-google-drive via npm, pakai Service Account)
     "google-drive": {
         "command": "npx",
-        "args": ["-y", "@modelcontextprotocol/server-googledrive"]
+        "args": ["-y", "mcp-google-drive"],
+        "env": {
+            "GOOGLE_APPLICATION_CREDENTIALS": os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", ""),
+        }
     },
     # 2. Puppeteer (Web Scraper / Headless Browser)
     "puppeteer": {
         "command": "npx",
         "args": ["-y", "@modelcontextprotocol/server-puppeteer"]
     },
-    # 3. Fetch (Simple Web Fetcher)
+    # 3. Fetch (Simple Web Fetcher - Python package, dijalankan via uvx)
     "fetch": {
-        "command": "npx",
-        "args": ["-y", "@modelcontextprotocol/server-fetch"]
+        "command": "uvx",
+        "args": ["mcp-server-fetch"]
     }
 }
 
